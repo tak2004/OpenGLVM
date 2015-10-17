@@ -1,0 +1,8 @@
+AddSourceDirectoryRecursive(fileSrcList "src" "Source")
+AddHeaderDirectoryRecursive(fileHdrList "include" "Includes")
+set(LIBOPENGLSPECIFICATION_FILES ${fileSrcList} ${fileHdrList})
+Generate(MODULE LIBOPENGLSPECIFICATION LibOpenGLSpecification "Tools")
+target_include_directories(LibOpenGLSpecification PRIVATE include/)
+AddPublicInclude(LIBOPENGLSPECIFICATION ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+AddPublicDefine(LIBOPENGLSPECIFICATION SPEC_STATIC)
+Finalize(LIBOPENGLSPECIFICATION)
