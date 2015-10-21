@@ -17,9 +17,13 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Microsoft.Win32;
+using PropertyTools.Wpf;
 
 namespace OGLVMBuilder
 {
+    using System.ComponentModel;
+    using PropertyTools;
+
     public class State
     {
         public string Name { get; private set; }
@@ -28,16 +32,46 @@ namespace OGLVMBuilder
             this.Name = name;
             Commands = new ObservableCollection<Command>();
         }
-    }    
+    }
 
+    [Serializable]
     public class Command
     {
-        public string Name { get; set; }
-        public Command(string name)
-        { 
-            this.Name = name;
+        [Serializable]
+        public class Parameter
+        {
+            public Parameter(string NewName, string NewType)
+            {
+                Name = NewName;
+                Type = NewType;
+            }
+            public string Name { get; private set; }
+            public string Type { get; private set; }
+            public string Value { get; set; }
         }
-    }    
+
+        public string Name { get; private set; }
+
+        public ObservableCollection<Parameter> Parameters { get; private set; }
+
+        public Command(string NewName, ObservableCollection<Parameter> NewParameters)
+        { 
+            Name = NewName;
+            Parameters = NewParameters;
+        }
+    }
+
+    public class Variable
+    {
+        public Variable(string NewName, string NewType)
+        {
+            Name = NewName;
+            Type = NewType;
+        }
+        public string Name { get; set; }
+        public string Type { get; set; }
+        public string Value { get; set; }
+    }
 
     /// <summary>
     /// Interaction logic for MainWindow.xaml
@@ -59,22 +93,27 @@ namespace OGLVMBuilder
             return FindVisualParent<T>(parentObject);
         }
 
-        private ObservableCollection<State> code = new ObservableCollection<State>() { };
+        private ObservableCollection<State> states = new ObservableCollection<State>() { };
+        private ObservableCollection<Variable> variables = new ObservableCollection<Variable>() { };
 
         public MainWindow()
         {
             InitializeComponent();
 
-            code.Add(new State("initialize"));
-            code.Add(new State("shutdown"));
-            code[0].Commands.Add(new Command("glBegin"));
-            code[0].Commands.Add(new Command("glEnd"));
-            code[1].Commands.Add(new Command("glBegin"));
-            code[1].Commands.Add(new Command("glEnd"));
+            states.Add(new State("initialize"));
+            states.Add(new State("shutdown"));
+            states[0].Commands.Add(new Command("glBegin", new ObservableCollection<Command.Parameter>()));
+            states[0].Commands.Add(new Command("glEnd", new ObservableCollection<Command.Parameter>()));
+            states[1].Commands.Add(new Command("glBegin", new ObservableCollection<Command.Parameter>()));
+            states[1].Commands.Add(new Command("glEnd", new ObservableCollection<Command.Parameter>()));
+
+            variables.Add(new Variable("vertexdata", "void*"));
+            variables.Add(new Variable("vertexdatasize", "GLuint"));
 
             DataContext = new
             {
-                Code = code
+                States = states,
+                Variables = variables
             };
 
             LoadSpecs();
@@ -145,7 +184,13 @@ namespace OGLVMBuilder
                     {
                         if (!knownCommands.ContainsKey(command.Name))
                         {
-                            knownCommands.Add(command.Name, command.Name);
+                            ObservableCollection<Command.Parameter> parameters = new ObservableCollection<Command.Parameter>();
+                            foreach (var parameter in command.Parameters)
+                            {
+                                parameters.Add(new Command.Parameter(parameter.Name, parameter.Type));
+                            }
+                            Command cmd = new Command(command.Name, parameters);
+                            knownCommands.Add(command.Name, cmd);
                         }
                     }
                 }
@@ -153,7 +198,6 @@ namespace OGLVMBuilder
                 System.IO.FileStream fs = new System.IO.FileStream("dump.bin", System.IO.FileMode.Create);
                 BinaryFormatter formatter = new BinaryFormatter();
                 formatter.Serialize(fs, knownCommands);
-
             }
             else
             {
@@ -162,10 +206,22 @@ namespace OGLVMBuilder
                 knownCommands = (Hashtable)formatter.Deserialize(fs);
             }
 
+            List<Command> commands = new List<Command>();
             foreach(DictionaryEntry command in knownCommands)
             {
-                CommandList.Items.Add(command.Value);
+                 commands.Add(command.Value as Command);
             }
+            CommandList.ItemsSource = commands;
+            CollectionView view = (CollectionView)CollectionViewSource.GetDefaultView(CommandList.ItemsSource);
+            view.Filter = UserFilter;
+        }
+
+        private bool UserFilter(object item)
+        {
+            if (String.IsNullOrEmpty(txtFilter.Text))
+                return true;
+            else
+                return ((item as Command).Name.IndexOf(txtFilter.Text, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private void AppExit_Click(object sender, RoutedEventArgs e)
@@ -177,7 +233,7 @@ namespace OGLVMBuilder
         private void NewCode_Click(object sender, RoutedEventArgs e)
         {
             DataCheck();
-            code.Clear();
+            states.Clear();
         }
 
         protected void SaveData(string filename)
@@ -232,18 +288,18 @@ namespace OGLVMBuilder
 
             if (draggedItem != null)
             {
-                DragDrop.DoDragDrop(parent, draggedItem.Text, DragDropEffects.Move);
+                DragDrop.DoDragDrop(parent, draggedItem.DataContext, DragDropEffects.Copy);
             }
         }
 
         private void TreeView_Drop(object sender, DragEventArgs e)
         {
             TextBlock parent = (TextBlock)sender;
-            object data = e.Data.GetData(typeof(string));
+            object data = e.Data.GetData(typeof(Command));
             if (data != null && parent.DataContext is State)
             {
                 State state = (State)parent.DataContext;
-                state.Commands.Add(new Command(data as string));
+                state.Commands.Add(data as Command);
                 dataChanged = true;
             }
         }
@@ -259,7 +315,7 @@ namespace OGLVMBuilder
                 TextBlock lbi = (TextBlock)e.OriginalSource;
                 if (lbi != null)
                 {
-                    DragDrop.DoDragDrop(lbi, lbi.DataContext, DragDropEffects.Move);
+                    DragDrop.DoDragDrop(lbi, lbi.DataContext, DragDropEffects.Copy);
                 }
             }
         }
@@ -269,7 +325,7 @@ namespace OGLVMBuilder
             SectionDialog dlg = new SectionDialog();
             if (dlg.ShowDialog() == true)
             {
-                code.Add(new State(dlg.Statename));
+                states.Add(new State(dlg.Statename));
                 dataChanged = true;
             }
         }
@@ -287,7 +343,7 @@ namespace OGLVMBuilder
             {
                 TextBlock cmdComponent = menu.PlacementTarget as TextBlock;
                 Command cmd = cmdComponent.DataContext as Command;
-                foreach(var state in code)
+                foreach(var state in states)
                 {
                     if (state.Commands.Remove(cmd))
                         break;
@@ -304,9 +360,27 @@ namespace OGLVMBuilder
             {
                 TextBlock stateComponent = menu.PlacementTarget as TextBlock;
                 State state = stateComponent.DataContext as State;
-                code.Remove(state);
+                states.Remove(state);
                 dataChanged = true;
             }
+        }
+
+        private void CodeTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+        {
+//             if (e.NewValue is Command)
+//             {
+//                 selectedFunction = (Observable)e.NewValue;
+// 
+//             }
+//             else
+//             {
+//                 selectedFunction = null;
+//             }
+        }
+
+        private void txtFilter_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            CollectionViewSource.GetDefaultView(CommandList.ItemsSource).Refresh();
         }
     }
 }

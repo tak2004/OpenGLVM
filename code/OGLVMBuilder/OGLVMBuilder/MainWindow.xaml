@@ -1,7 +1,9 @@
-﻿<Window x:Class="OGLVMBuilder.MainWindow"
+﻿<Window
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="MainWindow" Height="350" Width="525" Closing="Window_Closing">
+        xmlns:pt="http://propertytools.org/wpf" x:Class="OGLVMBuilder.MainWindow"
+        Title="MainWindow" Height="600" Width="800" Closing="Window_Closing"
+        MinWidth="800" MinHeight="600">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -18,6 +20,7 @@
         </Menu>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition MaxWidth="250"/>
                 <ColumnDefinition/>
                 <ColumnDefinition/>
             </Grid.ColumnDefinitions>
@@ -27,11 +30,23 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <StackPanel Grid.Row="0">
-                    <TextBox TextWrapping="Wrap" Text="TextBox" Margin="4"/>
+                    <TextBox TextWrapping="Wrap" Margin="4" Name="txtFilter" TextChanged="txtFilter_TextChanged"/>
                 </StackPanel>
-                <ListBox Margin="4" Grid.Row="1" x:Name="CommandList" PreviewMouseLeftButtonDown="CommandList_PreviewMouseLeftButtonDown"/>
+                <ListView Margin="4" Grid.Row="1" x:Name="CommandList" PreviewMouseLeftButtonDown="CommandList_PreviewMouseLeftButtonDown">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn DisplayMemberBinding="{Binding Name}"/>
+                        </GridView>
+                    </ListView.View>
+                </ListView>
             </Grid>
-            <TreeView x:Name="CodeTree" Grid.Column="1" Margin="4" ItemsSource="{Binding Code}">
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="150"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <DataGrid Grid.Row="0" Margin="4" ItemsSource="{Binding Variables}" CanUserReorderColumns="False" AlternatingRowBackground="Gainsboro" AlternationCount="2"/>
+                <TreeView Grid.Row="1" x:Name="CodeTree" Margin="4" ItemsSource="{Binding States}" SelectedItemChanged="CodeTree_SelectedItemChanged">
                 <TreeView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Add state" Click="MenuItem_Click"/>
@@ -41,33 +56,42 @@
                 <TreeView.ItemTemplate>
                     <HierarchicalDataTemplate ItemsSource="{Binding Commands}">
                         <TextBlock FontWeight="bold" Text="{Binding Name}" AllowDrop="True"
-                                   Drop="TreeView_Drop">
+							Drop="TreeView_Drop">
                             <TextBlock.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="Delete state" Click="DeleteState_Click"
-                                              CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Parent}"/>
+										CommandParameter="{Binding Parent, RelativeSource={RelativeSource Self}}"/>
                                 </ContextMenu>
                             </TextBlock.ContextMenu>
                         </TextBlock>
                         <HierarchicalDataTemplate.ItemTemplate>
-                            <HierarchicalDataTemplate>
+                            <HierarchicalDataTemplate ItemsSource="{Binding Parameters}">
                                 <TextBlock FontWeight="Normal" Text="{Binding Name}" 
-                                           PreviewMouseLeftButtonDown="ListBoxItem_PreviewMouseLeftButtonDown"
-                                           AllowDrop="True" Drop="ListBoxItem_Drop"
-                                            PreviewMouseMove="TreeView_PreviewMouseMove">
+									PreviewMouseLeftButtonDown="ListBoxItem_PreviewMouseLeftButtonDown"
+									AllowDrop="True" Drop="ListBoxItem_Drop"
+									PreviewMouseMove="TreeView_PreviewMouseMove">
                                     <TextBlock.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="Delete command" Click="DeleteCommand_Click"
-                                                      CommandParameter="{Binding RelativeSource={RelativeSource Self}, Path=Parent}"/>
+												CommandParameter="{Binding Parent, RelativeSource={RelativeSource Self}}"/>
                                         </ContextMenu>
                                     </TextBlock.ContextMenu>
                                 </TextBlock>
+                                <HierarchicalDataTemplate.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </DataTemplate>
+                                </HierarchicalDataTemplate.ItemTemplate>
                             </HierarchicalDataTemplate>
                         </HierarchicalDataTemplate.ItemTemplate>
                     </HierarchicalDataTemplate>
                 </TreeView.ItemTemplate>
             </TreeView>
-            <GridSplitter Grid.Column="0" Width="2" HorizontalAlignment="Right" Background="Gray"/>
+            </Grid>
+            <Grid Grid.Column="2">
+                <pt:PropertyGrid x:Name="PropertyGrid" SelectedObject="{Binding SelectedItem, ElementName=CodeTree}">
+                </pt:PropertyGrid>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
