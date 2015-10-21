@@ -28,4 +28,5 @@ AddPublicInclude(TECHNOLOGY "technology")
 Finalize(TECHNOLOGY)
 
 add_subdirectory("libSpec")
+add_subdirectory("libOGLIF")
 add_subdirectory("CodeGenerator")

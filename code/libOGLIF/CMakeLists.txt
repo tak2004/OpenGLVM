@@ -1,0 +1,18 @@
+option(libOGLIF_Static "Build the lib as static or shared library." OFF)
+
+if(libOGLIF_Static)
+    set(LIBOGLIF_BUILDTYPE MODULE)
+    set(LIBOGLIF_BUILDDEFINE OGLIF_STATIC)
+else()
+    set(LIBOGLIF_BUILDTYPE SHARED)
+    set(LIBOGLIF_BUILDDEFINE "")
+endif()
+
+AddSourceDirectoryRecursive(fileSrcList "src" "Source")
+AddHeaderDirectoryRecursive(fileHdrList "include" "Includes")
+set(LIBOGLIF_FILES ${fileSrcList} ${fileHdrList})
+Generate(${LIBOGLIF_BUILDTYPE} LIBOGLIF libOGLIF "Libraries")
+target_include_directories(libOGLIF PRIVATE include/)
+AddPublicInclude(LIBOGLIF ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+AddPublicDefine(LIBOGLIF ${LIBOGLIF_BUILDDEFINE})
+Finalize(LIBOGLIF)
