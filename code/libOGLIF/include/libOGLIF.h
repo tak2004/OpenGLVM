@@ -48,6 +48,7 @@
 #endif
 
 #include <stdint.h>
+#include <stdlib.h>
 
 // Use own types by set the defines before.
 #ifndef OGLIF_U8
@@ -68,9 +69,16 @@
 #ifndef OGLIF_SIZE
 #define OGLIF_SIZE size_t
 #endif
+#ifndef OGLIF_TYPE
+#define OGLIF_TYPE uint8_t
+#endif
 
 #ifndef OGLIF_INVALIDHANDLE
 #define OGLIF_INVALIDHANDLE 0
+#endif
+
+#ifndef OGLIF_FOURCC
+#define OGLIF_FOURCC 'GLIF'
 #endif
 
 typedef struct
@@ -141,7 +149,28 @@ OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY ParseFromMemory(const OGLIF_U8* Data, OGLIF_
     void* (*Allocate)(OGLIF_SIZE Bytes)=malloc, void(*Deallocate)(void* MemoryPointer)=free,
     void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize)=realloc);
 
+OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY CreateHandle(void* (*Allocate)(OGLIF_SIZE Bytes) = malloc, 
+    void(*Deallocate)(void* MemoryPointer) = free,
+    void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize) = realloc);
+
 OGLIFAPI void OGLIFAPIENTRY FreeHandle(OGLIF_HANDLE Handle);
+
+/**
+ * @param Name Takes a \0 terminated Utf8 string.
+ */
+OGLIFAPI void OGLIFAPIENTRY AddState(OGLIF_HANDLE Handle, const OGLIF_U8* Name, 
+    OGLIF_U32 NameSizeInBytes);
+
+/**
+* @param Name Takes a \0 terminated Utf8 string.
+*/
+OGLIFAPI void OGLIFAPIENTRY AddVariable(OGLIF_HANDLE Handle, const OGLIF_U8* Name,
+                                        OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type,
+                                        const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes);
+
+// OGLIFAPI void OGLIFAPIENTRY AddCommand(OGLIF_HANDLE Handle, OGLIF_U16 CommandId,
+//                                        const OGLIF_U8* ParameterData, 
+//                                        OGLIF_U32 DataSizeInBytes);
 
 #ifdef __cplusplus
     }

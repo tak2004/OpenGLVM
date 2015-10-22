@@ -1,5 +1,22 @@
 #define OGLIF_BUILD
 #include "libOGLIF.h"
+#include "SmallObjectAllocator.hpp"
+#include <string.h>
+#include <new>
+
+#if defined(_MSC_VER) && _MSC_VER < 1400
+typedef __int64 GLint64EXT;
+typedef unsigned __int64 GLuint64EXT;
+#elif defined(_MSC_VER) || defined(__BORLANDC__)
+typedef signed long long GLint64EXT;
+typedef unsigned long long GLuint64EXT;
+#else
+#  if defined(__MINGW32__) || defined(__CYGWIN__)
+#include <inttypes.h>
+#  endif
+typedef int64_t GLint64EXT;
+typedef uint64_t GLuint64EXT;
+#endif
 
 typedef unsigned int GLenum;
 typedef unsigned int GLbitfield;
@@ -17,21 +34,6 @@ typedef float GLclampf;
 typedef double GLdouble;
 typedef double GLclampd;
 typedef void GLvoid;
-
-#if defined(_MSC_VER) && _MSC_VER < 1400
-typedef __int64 GLint64EXT;
-typedef unsigned __int64 GLuint64EXT;
-#elif defined(_MSC_VER) || defined(__BORLANDC__)
-typedef signed long long GLint64EXT;
-typedef unsigned long long GLuint64EXT;
-#else
-#  if defined(__MINGW32__) || defined(__CYGWIN__)
-#include <inttypes.h>
-#  endif
-typedef int64_t GLint64EXT;
-typedef uint64_t GLuint64EXT;
-#endif
-
 typedef GLint64EXT  GLint64;
 typedef GLuint64EXT GLuint64;
 typedef struct __GLsync *GLsync;
@@ -45,6 +47,8 @@ typedef unsigned int GLhandleARB;
 typedef unsigned short GLhalfARB;
 typedef unsigned short GLhalfNV;
 typedef GLintptr GLvdpauSurfaceNV;
+
+namespace OGLIF {
 
 int stringTypeToSize(const char* type, bool isPointer)
 {
@@ -89,42 +93,212 @@ int stringTypeToSize(const char* type, bool isPointer)
     return -1;
 }
 
-class IntermediateTree
+OGLIF_U32 CalculateFNV(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
+{
+    OGLIF_U32 hash = 2166136261u;
+    for(OGLIF_SIZE i = 0; i < NameSizeInBytes; ++i)
+    {
+        hash ^= *Name++;
+        hash *= 16777619u;
+    }
+    return hash;
+}
+
+class StateNode:public SmallObject
 {
 public:
-    IntermediateTree(void* Location, void* (*Allocate)(OGLIF_SIZE Bytes), 
-        void(*Deallocate)(void* MemoryPointer), 
-        void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize))
-    :m_Location(Location)
-    ,m_Allocate(Allocate)
-    ,m_Deallocate(Deallocate)
-    ,m_Reallocate(Reallocate)
+    StateNode(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
+    :m_Name(0)
+    ,m_NameSizeInBytes(0)
+    ,Next(0)
+    {
+        m_Hash = CalculateFNV(Name, NameSizeInBytes);
+    }
+
+    virtual ~StateNode()
     {
 
     }
 
-    void* m_Location;
+    StateNode* Next;
+private:
+    OGLIF_U8* m_Name;
+    OGLIF_U32 m_NameSizeInBytes;
+    OGLIF_U32 m_Hash;
+};
+
+class VariableNode:public SmallObject
+{
+public:
+    VariableNode(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type, 
+                 const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes)
+    :m_Name(0)
+    ,m_NameSizeInBytes(0)
+    ,Next(0)
+    ,m_Type(Type)
+    {
+        m_Hash = CalculateFNV(Name, NameSizeInBytes);
+    }
+
+    virtual ~VariableNode()
+    {
+
+    }
+
+    VariableNode* Next;
+private:
+    OGLIF_U8* m_Name;
+    OGLIF_U32 m_NameSizeInBytes;
+    OGLIF_U32 m_Hash;
+    OGLIF_TYPE m_Type;
+};
+
+class IntermediateTree
+{
+public:
+    IntermediateTree(void* Scratchpad, OGLIF_SIZE Size,
+        void* (*Allocate)(OGLIF_SIZE Bytes), 
+        void(*Deallocate)(void* MemoryPointer), 
+        void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize))
+    :m_Scratchpad(Scratchpad)
+    ,m_Size(Size)
+    ,m_InUse(sizeof(IntermediateTree))
+    ,m_Allocate(Allocate)
+    ,m_Deallocate(Deallocate)
+    ,m_Reallocate(Reallocate)
+    ,m_FirstState(0)
+    ,m_LastState(0)
+    {
+        m_SmallObjectPool = new(reinterpret_cast<OGLIF_U8*>(m_Scratchpad)+m_InUse) SmallObjectAllocator(128,4096,Allocate,Deallocate,Reallocate);
+        m_InUse += sizeof(SmallObjectAllocator);
+    }
+
+    bool AddState(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
+    {
+        bool result = false;
+        SmallObject* node = m_SmallObjectPool->Allocate();
+        if(node)
+        {
+            StateNode* state = new(node)StateNode(Name, NameSizeInBytes);
+            if(m_FirstState == 0)
+            {
+                m_FirstState = state;
+                m_LastState = state;
+            }
+            else
+            {
+                m_LastState->Next = state;
+                m_LastState = state;
+            }
+
+            result = true;
+        }
+        return result;
+    }
+
+    bool AddVariable(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes,
+        OGLIF_TYPE Type, const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes)
+    {
+        bool result = false;
+        SmallObject* node = m_SmallObjectPool->Allocate();
+        if(node)
+        {
+            VariableNode* variable = new(node)VariableNode(Name, NameSizeInBytes, 
+                Type, Value, ValueSizeInBytes);
+            if(m_FirstVariable == 0)
+            {
+                m_FirstVariable = variable;
+                m_LastVariable = variable;
+            }
+            else
+            {
+                m_LastVariable->Next = variable;
+                m_LastVariable = variable;
+            }
+
+            result = true;
+        }
+        return result;
+    }
+
+    void* m_Scratchpad;
     void* (*m_Allocate)(OGLIF_SIZE);
     void  (*m_Deallocate)(void*);
     void* (*m_Reallocate)(void*, OGLIF_SIZE);
+private:
+    OGLIF_SIZE m_Size;
+    OGLIF_SIZE m_InUse;
+    SmallObjectAllocator* m_SmallObjectPool;
+    StateNode* m_FirstState;
+    StateNode* m_LastState;
+    VariableNode* m_FirstVariable;
+    VariableNode* m_LastVariable;
 };
+
+bool IsRightFormat(const OGLIF_U8* Data, OGLIF_U32 DataSize)
+{
+    bool result = false;
+    auto* identifier = reinterpret_cast<const OGLIF_Identifier*>(Data);
+    if(identifier->FourCC == OGLIF_FOURCC && identifier->Version == 1 &&
+       DataSize >= sizeof(OGLIF_Identifier) + sizeof(OGLIF_Header))
+    {
+        result = true;
+    }
+    return result;
+}
 
 OGLIF_HANDLE OGLIFAPIENTRY ParseFromMemory(const OGLIF_U8* Data, OGLIF_U32 DataSize,
     void* (*Allocate)(OGLIF_SIZE Bytes), void(*Deallocate)(void* MemoryPointer),
     void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize))
 {
-    OGLIF_HANDLE result = 0;
-    if(Data != 0 && DataSize > 0 && Allocate != 0 && Deallocate != 0)
+    OGLIF_HANDLE result = OGLIF_INVALIDHANDLE;
+    if(Data != 0 && DataSize >= sizeof(OGLIF_Identifier) && Allocate != 0 && Deallocate != 0 &&
+       IsRightFormat(Data, DataSize))
     {
         IntermediateTree* tree = 0;
-        void* p = Allocate(DataSize * 2);
+
+        auto* identifier = reinterpret_cast<const OGLIF_Identifier*>(Data);
+        auto* header = reinterpret_cast<const OGLIF_Header*>(identifier+1);
+        const OGLIF_Section* sections = 0;
+        if(header->DataSize > 0)
+        {
+            sections = reinterpret_cast<const OGLIF_Section*>(header + 1);
+        }
+
+        void* p = Allocate(4096);
         if(p)
         {
-            // copy data
-
-            p = reinterpret_cast<OGLIF_U8*>(p)+DataSize;
             // placement new on allocated memory block
-            tree = new(p) IntermediateTree(p, Allocate, Deallocate, Reallocate);            
+            tree = new(p)IntermediateTree(p, 4096, Allocate, Deallocate, Reallocate);
+        }
+
+        if(tree)
+        {
+            if(sections)
+            {
+
+            }
+            result = reinterpret_cast<OGLIF_HANDLE>(tree);
+        }
+    }
+    return result;
+}
+
+}
+
+OGLIF_HANDLE OGLIFAPIENTRY CreateHandle(void* (*Allocate)(OGLIF_SIZE Bytes), 
+    void(*Deallocate)(void* MemoryPointer),
+    void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize))
+{
+    OGLIF_HANDLE result = OGLIF_INVALIDHANDLE;
+    if(Allocate != 0 && Deallocate != 0)
+    {
+        OGLIF::IntermediateTree* tree = 0;
+        void* p = Allocate(4096);
+        if(p)
+        {
+            // placement new on allocated memory block
+            tree = new(p)OGLIF::IntermediateTree(p, 4096, Allocate, Deallocate, Reallocate);
         }
 
         if(tree)
@@ -135,13 +309,12 @@ OGLIF_HANDLE OGLIFAPIENTRY ParseFromMemory(const OGLIF_U8* Data, OGLIF_U32 DataS
     return result;
 }
 
-
 void OGLIFAPIENTRY FreeHandle(OGLIF_HANDLE Handle)
 {
     if(Handle != OGLIF_INVALIDHANDLE)
     {
-        IntermediateTree* tree = reinterpret_cast<IntermediateTree*>(Handle);
-        void* p = tree->m_Location;
+        OGLIF::IntermediateTree* tree = reinterpret_cast<OGLIF::IntermediateTree*>(Handle);
+        void* p = tree->m_Scratchpad;
         void (*deallocate)(void*) = tree->m_Deallocate;
 
         tree->~IntermediateTree();
@@ -149,3 +322,28 @@ void OGLIFAPIENTRY FreeHandle(OGLIF_HANDLE Handle)
     }
 }
 
+void OGLIFAPIENTRY AddState(OGLIF_HANDLE Handle, const OGLIF_U8* Name,
+                            OGLIF_U32 NameSizeInBytes)
+{
+    if(Handle != OGLIF_INVALIDHANDLE)
+    {
+        OGLIF::IntermediateTree* tree = reinterpret_cast<OGLIF::IntermediateTree*>(Handle);
+        tree->AddState(Name, NameSizeInBytes);
+    }
+}
+
+bool IsValidValue(OGLIF_TYPE Type, const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes)
+{
+    return false;
+}
+
+void OGLIFAPIENTRY AddVariable(OGLIF_HANDLE Handle, const OGLIF_U8* Name, 
+    OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type, const OGLIF_U8* Value, 
+    OGLIF_U32 ValueSizeInBytes)
+{
+    if(Handle != OGLIF_INVALIDHANDLE && IsValidValue(Type, Value, ValueSizeInBytes))
+    {
+        OGLIF::IntermediateTree* tree = reinterpret_cast<OGLIF::IntermediateTree*>(Handle);
+        tree->AddVariable(Name, NameSizeInBytes, Type, Value, ValueSizeInBytes);
+    }
+}
