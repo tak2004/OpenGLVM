@@ -3,84 +3,77 @@
 
 namespace OGLIF { 
 
-SmallObjectAllocator::SmallObjectAllocator(OGLIF_U32 ObjectSize, OGLIF_U32 PoolSize,
-                                           void* (*Allocate)(OGLIF_SIZE Bytes),
-                                           void(*Deallocate)(void* MemoryPointer),
-                                           void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize))
+SmallObjectAllocator::SmallObjectAllocator(OGLIF_U32 ObjectSize, OGLIF_U32 PoolSize)
 :m_FreeObjectCount(0)
 ,m_ObjectSize(ObjectSize)
 ,m_PoolCount(0)
 ,m_Pools(0)
 ,m_PoolSize(PoolSize)
 ,m_ObjectsPerPool(PoolSize/ObjectSize)
-,m_Allocate(Allocate)
-,m_Deallocate(Deallocate)
-,m_Reallocate(Reallocate)
+,m_MaxPools(0)
 {
 
 }
 
-SmallObjectAllocator::~SmallObjectAllocator()
+OGLIF_U8* SmallObjectAllocator::Allocate()
 {
-    if(m_Pools)
-    {
-        for (OGLIF_SIZE i = 0; i < m_PoolCount; ++i)
-        {
-            for (OGLIF_SIZE j = 0; j < m_ObjectsPerPool;++j)
-            {
-                reinterpret_cast<SmallObject*>(m_Pools[i]+m_ObjectSize*j)->~SmallObject();
-            }
-            m_Deallocate(m_Pools[i]);
-        }
-        m_Deallocate(m_Pools);
-        m_Pools = 0;
-    }
-}
-
-SmallObject* SmallObjectAllocator::Allocate()
-{
-    SmallObject* result = 0;
+    OGLIF_U8* result = 0;
     if(m_FreeObjectCount > 0)
     {
         OGLIF_SIZE poolIndex = m_PoolCount*m_ObjectsPerPool / m_FreeObjectCount;
         OGLIF_SIZE byteOffsetInPool = (m_ObjectsPerPool - (m_FreeObjectCount % m_ObjectsPerPool))*m_ObjectSize;
-        result = reinterpret_cast<SmallObject*>(m_Pools[poolIndex] + byteOffsetInPool);
+        result = m_Pools[poolIndex] + byteOffsetInPool;
         --m_FreeObjectCount;
     }
-    else
+    return result;
+}
+
+bool SmallObjectAllocator::AttachPool(OGLIF_U8* NewPool, OGLIF_U32 PoolSize)
+{
+    bool result = false;
+    if(PoolSize == m_PoolSize && NewPool != 0 && m_Pools != 0 &&
+       ReachedPoolLimit())
     {
-        // list isn't initialized yet
-        if(m_PoolCount == 0)
-        {
-            m_Pools = reinterpret_cast<OGLIF_U8**>(m_Allocate(4096));
-        }
-
-        // reached limit of pointer list, resize
-        if(m_PoolCount % (4096 / sizeof(void*)) == 0)
-        {
-            OGLIF_SIZE bytes = (m_PoolCount / (4096 / sizeof(void*)) + 1) * 4096;
-            // if reallocate is available then use it
-            if(m_Reallocate)
-            {
-                m_Pools = reinterpret_cast<OGLIF_U8**>(m_Reallocate(m_Pools, bytes));
-            }
-            else
-            {// fall back
-                void* p = m_Allocate(bytes);
-                memcpy(p,m_Pools, bytes-4096);
-                m_Deallocate(m_Pools);
-                m_Pools = reinterpret_cast<OGLIF_U8**>(p);
-            }
-        }
-
-        // create a new page an object
-        m_Pools[m_PoolCount] = reinterpret_cast<OGLIF_U8*>(m_Allocate(m_PoolSize));
-        m_FreeObjectCount += m_ObjectsPerPool;
-        result = reinterpret_cast<SmallObject*>(m_Pools[m_PoolCount]);
-        --m_FreeObjectCount;
+        result = true;
+        m_Pools[m_PoolCount] = reinterpret_cast<OGLIF_U8*>(NewPool);
         ++m_PoolCount;
     }
     return result;
+}
+
+OGLIF_U8* SmallObjectAllocator::ResizePoolList(OGLIF_U8* Memory, OGLIF_U32 Bytes)
+{
+    OGLIF_U8* result = 0;
+    OGLIF_U32 newMaxPoolCount = Bytes / sizeof(void*);
+    OGLIF_U32 oldObjectCount = m_PoolCount*m_ObjectsPerPool;
+    if(Memory != 0 && newMaxPoolCount >= m_PoolCount)
+    {
+        m_MaxPools = newMaxPoolCount;
+        memcpy(Memory, m_Pools, m_PoolCount*sizeof(void*));
+        result = reinterpret_cast<OGLIF_U8*>(m_Pools);
+        m_Pools = reinterpret_cast<OGLIF_U8**>(Memory);
+    }
+    return result;
+}
+
+bool SmallObjectAllocator::IsNoSpaceLeft()
+{
+    return m_FreeObjectCount == 0;
+}
+
+bool SmallObjectAllocator::ReachedPoolLimit()
+{
+    return m_MaxPools == m_PoolCount && IsNoSpaceLeft();
+}
+
+OGLIF_U32 SmallObjectAllocator::PoolSize() const
+{
+    return m_PoolSize;
+}
+
+OGLIF_U32 SmallObjectAllocator::PoolCount() const
+{
+    return m_PoolCount;
 }
 
 }

@@ -5,39 +5,29 @@
 
 namespace OGLIF {
 
-class SmallObject
-{
-public:
-    virtual ~SmallObject() {}
-protected:
-    SmallObject() {}
-private:
-    SmallObject(const SmallObject&);
-    SmallObject& operator=(const SmallObject&);
-};
-
 class SmallObjectAllocator
 {
 public:
-    SmallObjectAllocator(OGLIF_U32 ObjectSize, OGLIF_U32 PoolSize, 
-                         void* (*Allocate)(OGLIF_SIZE Bytes),
-                         void(*Deallocate)(void* MemoryPointer),
-                         void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize));
-    ~SmallObjectAllocator();
+    SmallObjectAllocator(OGLIF_U32 ObjectSize, OGLIF_U32 PoolSize);
 
-    SmallObject* Allocate();
+    OGLIF_U8* Allocate();
+
+    bool AttachPool(OGLIF_U8* NewPool, OGLIF_U32 PoolSize);
+    OGLIF_U8* ResizePoolList(OGLIF_U8* Memory, OGLIF_U32 Bytes);
 
     bool IsNoSpaceLeft();
+    bool ReachedPoolLimit();
+
+    OGLIF_U32 PoolSize()const;
+    OGLIF_U32 PoolCount()const;
 private:
     OGLIF_U32 m_ObjectSize;
     OGLIF_U32 m_ObjectsPerPool;
     OGLIF_U32 m_FreeObjectCount;
     OGLIF_U32 m_PoolCount;
     OGLIF_U32 m_PoolSize;
+    OGLIF_U32 m_MaxPools;
     OGLIF_U8** m_Pools;
-    void* (*m_Allocate)(OGLIF_SIZE);
-    void(*m_Deallocate)(void*);
-    void* (*m_Reallocate)(void*, OGLIF_SIZE);
 };
 
 }

@@ -72,14 +72,30 @@
 #ifndef OGLIF_TYPE
 #define OGLIF_TYPE uint8_t
 #endif
-
-#ifndef OGLIF_INVALIDHANDLE
-#define OGLIF_INVALIDHANDLE 0
+#ifndef OGLIF_I32
+#define OGLIF_I32 int32_t
+#endif
+#ifndef OGLIF_ERROR
+#define OGLIF_ERROR int32_t
 #endif
 
-#ifndef OGLIF_FOURCC
-#define OGLIF_FOURCC 'GLIF'
-#endif
+// OGLIF_ERROR begin
+static const OGLIF_ERROR OGLIF_OK = 0;
+static const OGLIF_ERROR OGLIF_INVALIDPARAMETER = 1;
+static const OGLIF_ERROR OGLIF_OUTOFMEMORY = 2;
+// OGLIF_ERROR end
+
+static const OGLIF_HANDLE OGLIF_INVALIDHANDLE = 0;
+
+static const OGLIF_U32 OGLIF_FOURCC = 'GLIF';
+
+typedef struct
+{
+    OGLIF_HANDLE Variable;
+    OGLIF_TYPE Type;
+    const OGLIF_U8* Value;
+    OGLIF_U32 ValueSize;
+}OGLIF_PARAMETER;
 
 typedef struct
 {
@@ -136,6 +152,10 @@ typedef struct
     OGLIF_SymbolEntry* Symbols;
 }OGLIF_SymbolLookupTableSection;
 
+typedef void* (*Allocator)(OGLIF_SIZE Bytes);
+typedef void  (*Deallocator)(void* MemoryPointer);
+typedef void* (*Reallocator)(void* MemoryPointer, OGLIF_SIZE NewSize);
+
 /** Brief Parse the specified memory block.
 *
 * Each OGLIF_HANDLE has it's own allocation function set to allow more efficient
@@ -146,31 +166,41 @@ typedef struct
 * @return Returns OGLIF_INVALIDHANDLE if an error occurred else a valid handle.
 */
 OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY ParseFromMemory(const OGLIF_U8* Data, OGLIF_U32 DataSize,
-    void* (*Allocate)(OGLIF_SIZE Bytes)=malloc, void(*Deallocate)(void* MemoryPointer)=free,
-    void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize)=realloc);
+    Allocator Allocate, Deallocator Deallocate, Reallocator Reallocate, OGLIF_HANDLE* Destination);
 
-OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY CreateHandle(void* (*Allocate)(OGLIF_SIZE Bytes) = malloc, 
-    void(*Deallocate)(void* MemoryPointer) = free,
-    void* (*Reallocate)(void* MemoryPointer, OGLIF_SIZE NewSize) = realloc);
+/** Brief Create a new code tree.
+*
+* Every code tree have a own set of memory functions to work with.
+* This allows to optimize the work with an instance.
+* 
+* You can pass 0 for all three function pointer to use the default memory allocator.
+*
+* @param Reallocate Set the parameter 0 to disable reallocation.
+*/
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY CreateCodeTree(Allocator Allocate,
+    Deallocator Deallocate, Reallocator Reallocate, OGLIF_HANDLE* Destination);
 
-OGLIFAPI void OGLIFAPIENTRY FreeHandle(OGLIF_HANDLE Handle);
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY FreeCodeTree(OGLIF_HANDLE CodeTree);
+
+OGLIFAPI OGLIF_I32 OGLIFAPIENTRY BuildByteCode(OGLIF_HANDLE Handle, 
+    OGLIF_U8* Data, OGLIF_U16 DataSize);
 
 /**
  * @param Name Takes a \0 terminated Utf8 string.
  */
-OGLIFAPI void OGLIFAPIENTRY AddState(OGLIF_HANDLE Handle, const OGLIF_U8* Name, 
-    OGLIF_U32 NameSizeInBytes);
+OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddState(OGLIF_HANDLE CodeTree, 
+    const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes);
 
 /**
 * @param Name Takes a \0 terminated Utf8 string.
 */
-OGLIFAPI void OGLIFAPIENTRY AddVariable(OGLIF_HANDLE Handle, const OGLIF_U8* Name,
-                                        OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type,
-                                        const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes);
+OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddVariable(OGLIF_HANDLE CodeTree,
+    const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type, 
+    const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes);
 
-// OGLIFAPI void OGLIFAPIENTRY AddCommand(OGLIF_HANDLE Handle, OGLIF_U16 CommandId,
-//                                        const OGLIF_U8* ParameterData, 
-//                                        OGLIF_U32 DataSizeInBytes);
+OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddCommand(OGLIF_HANDLE CodeTree,
+    OGLIF_HANDLE State, OGLIF_U16 CommandId, OGLIF_U8 ParameterCount,
+    const OGLIF_PARAMETER* Parameters);
 
 #ifdef __cplusplus
     }
