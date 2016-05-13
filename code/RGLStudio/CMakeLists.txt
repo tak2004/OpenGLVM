@@ -1,0 +1,8 @@
+AddSourceDirectoryRecursive(fileSrcList "src" "Source")
+AddHeaderDirectoryRecursive(fileHdrList "include" "Includes")
+set(RGLSTUDIO_FILES ${fileSrcList} ${fileHdrList})
+Generate(EXECUTABLE RGLSTUDIO RGLStudio "Tools")
+target_include_directories(RGLStudio PRIVATE include/)
+target_link_libraries(RGLStudio LibOpenGLSpecification)
+AddDependency(RGLSTUDIO LibOpenGLSpecification IMGui RadonFramework)
+Finalize(RGLSTUDIO)

@@ -1,0 +1,7 @@
+AddSourceDirectoryRecursive(fileSrcList "." "Source")
+AddHeaderDirectoryRecursive(fileHdrList "." "Includes")
+set(IMGUI_FILES ${fileSrcList} ${fileHdrList})
+Generate(MODULE IMGUI IMGui "Libraries")
+target_include_directories(IMGui PRIVATE .)
+AddPublicInclude(IMGUI ${CMAKE_CURRENT_SOURCE_DIR})
+Finalize(IMGUI)
