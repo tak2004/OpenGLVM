@@ -6,7 +6,7 @@ namespace RGLStudio {
 
 void MainWindow::Initialize()
 {
-    Title("RGLStudio");
+    Title(RF_Type::String("RGLStudio"));
     m_Canvas = RF_Mem::AutoPointer<RF_Draw::Canvas3D>(new RF_Draw::Canvas3D(this));
 }
 
@@ -18,6 +18,7 @@ void MainWindow::Resize(const RF_Geo::Size2D<>& Value)
 
 void MainWindow::Idle()
 {
+    m_Canvas->Clear();
     RF_Form::Form::Idle();
     m_Canvas->SwapBuffer();
 }

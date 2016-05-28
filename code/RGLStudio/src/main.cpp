@@ -1,9 +1,10 @@
 #include <RadonFramework/precompiled.hpp>
 #include <RadonFramework/Radon.hpp>
-#include <libSpec.h>
 #include "MainWindow.hpp"
 #include <imgui.h>
+#include <RadonFramework/System/Drawing/OpenGL.hpp>
 #include <RadonFramework/backend/GL/glew.h>
+#include <libSpec.h>
 
 template <typename T, size_t N>
 constexpr size_t countof(T const (&)[N])
@@ -15,7 +16,9 @@ static RF_Type::Int32 g_ShaderHandle = 0, g_VertHandle = 0, g_FragHandle = 0;
 static RF_Type::Int32 g_AttribLocationTex = 0, g_AttribLocationProjMtx = 0;
 static RF_Type::UInt32 g_VboHandle = 0, g_VaoHandle = 0, g_ElementsHandle = 0;
 
-class MainLoop: public RF_Pattern::SignalReceiver
+extern void GenerateOpenGLHeaders();
+
+class MainLoop: public RF_Pattern::SignalReceiver, public RF_Pattern::IObserver
 {
 public:
     void Start()
@@ -27,9 +30,104 @@ public:
 
         ImGuiIO& io = ImGui::GetIO();
         io.RenderDrawListsFn = ImGui_ImplGlfwGL3_RenderDrawLists;
+        io.GetClipboardTextFn = ImGui_ImplGlfwGL3_GetClipboardText;
+        io.SetClipboardTextFn = ImGui_ImplGlfwGL3_SetClipboardText;
 
-        window->OnIdle += Connector<>(&MainLoop::Run);
+        io.KeyMap[ImGuiKey_Tab] = (int)RF_IO::VirtualKey::Tab;
+        io.KeyMap[ImGuiKey_Escape] = (int)RF_IO::VirtualKey::Escape;
+        io.KeyMap[ImGuiKey_LeftArrow] = (int)RF_IO::VirtualKey::Left;
+        io.KeyMap[ImGuiKey_UpArrow] = (int)RF_IO::VirtualKey::Up;
+        io.KeyMap[ImGuiKey_RightArrow] = (int)RF_IO::VirtualKey::Right;
+        io.KeyMap[ImGuiKey_DownArrow] = (int)RF_IO::VirtualKey::Down;
+        io.KeyMap[ImGuiKey_Enter] = (int)RF_IO::VirtualKey::Enter;
+        io.KeyMap[ImGuiKey_Backspace] = (int)RF_IO::VirtualKey::Backspace;
+        io.KeyMap[ImGuiKey_Home] = (int)RF_IO::VirtualKey::Home;
+        io.KeyMap[ImGuiKey_Delete] = (int)RF_IO::VirtualKey::Delete;
+        io.KeyMap[ImGuiKey_End] = (int)RF_IO::VirtualKey::End;
+        io.KeyMap[ImGuiKey_PageDown] = (int)RF_IO::VirtualKey::PageDown;
+        io.KeyMap[ImGuiKey_PageUp] = (int)RF_IO::VirtualKey::PageUp;
+        io.KeyMap[ImGuiKey_A] = 'a';
+        io.KeyMap[ImGuiKey_C] = 'c';
+        io.KeyMap[ImGuiKey_V] = 'v';
+        io.KeyMap[ImGuiKey_X] = 'x';
+        io.KeyMap[ImGuiKey_Y] = 'y';
+        io.KeyMap[ImGuiKey_Z] = 'z';
+
+        window->OnIdle += SignalReceiver::Connector<>(&MainLoop::Run);
+        window->OnKeyRelease += IObserver::Connector<MainLoop, const RF_IO::KeyboardEvent&>(&MainLoop::KeyRelease);
+        window->OnKeyPress += IObserver::Connector<MainLoop, const RF_IO::KeyboardEvent&>(&MainLoop::KeyPress);
+        window->OnPrintableKeyPressed += IObserver::Connector<MainLoop, const RF_IO::KeyboardEvent&>(&MainLoop::PrintableKeyPressed);
+        window->OnVerticalMouseWheelMoved += IObserver::Connector<MainLoop>(&MainLoop::VerticalMouseWheelMoved);
         RF_Form::WindowServiceLocator::Default().Application()->Run(window.Get());
+    }
+
+    void PrintableKeyPressed(const RF_IO::KeyboardEvent& Value)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        io.AddInputCharactersUTF8(Value.PrintableCharacter.c_str());
+        io.KeyCtrl = Value.Ctrl;
+        io.KeyShift = Value.Shift;
+        io.KeyAlt = Value.Alt;
+    }
+
+    void KeyRelease(const RF_IO::KeyboardEvent& Value)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if(!Value.PrintableCharacter.IsEmpty())
+        {
+            if(Value.Ctrl && Value.PrintableCharacter[0] >= 'a' &&
+               Value.PrintableCharacter[0] <= 'z')
+            {// hotkey
+                io.KeysDown[(int)Value.PrintableCharacter[0]] = false;
+            }
+        }
+        else
+        {// key
+            io.KeysDown[(int)Value.Key] = false;
+        }
+
+        io.KeyCtrl = Value.Ctrl;
+        io.KeyShift = Value.Shift;
+        io.KeyAlt = Value.Alt;
+    }
+
+    void KeyPress(const RF_IO::KeyboardEvent& Value)
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        if(!Value.PrintableCharacter.IsEmpty())
+        {
+            if(Value.Ctrl && Value.PrintableCharacter[0] >= 'a' &&
+               Value.PrintableCharacter[0] <= 'z')
+            {// hotkey
+                io.KeysDown[(int)Value.PrintableCharacter[0]] = true;
+            }
+        }
+        else
+        {// key
+            io.KeysDown[(int)Value.Key] = true;
+        }
+        
+        io.KeyCtrl = Value.Ctrl;
+        io.KeyShift = Value.Shift;
+        io.KeyAlt = Value.Alt;
+    }
+
+    void VerticalMouseWheelMoved(RF_Type::Int32 Value)
+    {
+        g_MouseWheel += (float)Value;
+    }
+
+    static const char* ImGui_ImplGlfwGL3_GetClipboardText()
+    {
+        static RF_Type::String clipboard;
+        clipboard = RF_Form::WindowServiceLocator::Default().Application()->GetClipboardText();
+        return clipboard.c_str();
+    }
+
+    static void ImGui_ImplGlfwGL3_SetClipboardText(const char* text)
+    {
+        RF_Type::String newText = RF_Type::String::UnsafeStringCreation(text);
+        RF_Form::WindowServiceLocator::Default().Application()->SetClipboardText(newText);
     }
 
     static void ImGui_ImplGlfwGL3_RenderDrawLists(ImDrawData* draw_data)
@@ -266,14 +364,14 @@ public:
         g_MouseWheel = 0.0f;
 
         // Hide OS mouse cursor if ImGui is drawing it
-        window->CursorVisible(io.MouseDrawCursor);
+        window->CursorVisible(!io.MouseDrawCursor);
 
         // Start the frame
         ImGui::NewFrame();
     }
 
     void Run()
-    {
+    {        
         m_FPS.Update();
 
         glBegin(GL_TRIANGLES);
@@ -293,6 +391,14 @@ public:
                 ImGui::MenuItem("Save");
                 ImGui::Separator();
                 ImGui::MenuItem("Exit");
+                ImGui::EndMenu();
+            }
+            if(ImGui::BeginMenu("OpenGL Tools"))
+            {
+                if(ImGui::MenuItem("Generate headers"))
+                {
+                    GenerateOpenGLHeaders();
+                }
                 ImGui::EndMenu();
             }
             ImGui::EndMainMenuBar();
