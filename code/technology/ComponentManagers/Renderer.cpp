@@ -3,8 +3,9 @@
 #include <RFECS/SharedAttributePool.hpp>
 #include "Components/Identifiers.hpp"
 #include <RadonFramework/Math/Geometry/ProjectionMatrix.hpp>
-#include <RadonFramework/Math/Geometry/Quaternion.hpp>
-#include <RadonFramework/backend/GL/glew.h>
+#include <RadonFramework/Math/Geometry/QuatF32.hpp>
+#include <RadonFramework/System/Drawing/OpenGL.hpp>
+//#include <RadonFramework/backend/GL/glew.h>
 
 using namespace RadonFastEntityComponentSystem;
 

@@ -1,6 +1,6 @@
 #include "precompiled.hpp"
 #include "MainWindow.hpp"
-#include <RadonFramework/backend/GL/glew.h>
+#include <RadonFramework/System/Drawing/OpenGL.hpp>
 
 namespace RGLStudio {
 

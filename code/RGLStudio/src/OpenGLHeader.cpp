@@ -104,13 +104,15 @@ const GraphicMachineFunction GM%s::GRAPHICMACHINEFUNCTION = reinterpret_cast<Gra
 
 void GenerateConstants(unsigned int constantCount, Constant* constants)
 {
-    auto constFile = RF_IO::Directory::ApplicationDirectory()->SubFile(RF_Type::String("GraphicMachineOpenGLConstants.hpp"));
+    auto constFile = RF_IO::Directory::ApplicationDirectory()->SubFile(RF_Type::String("OpenGLConstants.hpp"));
     RF_IO::FileStream constantFile;
     if(constantFile.Open(constFile->Location(), RF_SysFile::FileAccessMode::Write, RF_SysFile::FileAccessPriority::DelayReadWrite))
     {
-        constantFile.WriteText(RF_Type::String("#ifndef RF_DRAWING_GRAPHICMACHINEOPENGLCONSTANTS_HPP\n\
-#define RF_DRAWING_GRAPHICMACHINEOPENGLCONSTANTS_HPP\n\
-\n"));
+        constantFile.WriteText(RF_Type::String("#ifndef RF_SYSTEM_DRAWING_OPENGLCONSTANTS_HPP\n\
+#define RF_SYSTEM_DRAWING_OPENGLCONSTANTS_HPP\n\
+#if _MSC_VER > 1000\n\
+#pragma once\n\
+#endif\n\n"));
 
         for(auto i = 0; i < constantCount; ++i)
         {
@@ -121,7 +123,7 @@ void GenerateConstants(unsigned int constantCount, Constant* constants)
             }
         }
 
-        constantFile.WriteText(RF_Type::String("\n#endif // RF_DRAWING_GRAPHICMACHINEOPENGLCONSTANTS_HPP"));
+        constantFile.WriteText(RF_Type::String("\n#endif // RF_SYSTEM_DRAWING_OPENGLCONSTANTS_HPP"));
         constantFile.Close();
     }
 }
@@ -245,7 +247,17 @@ void GenerateOpenGLFunctionDispatcher(RF_Type::UInt32 functionCount, Function* f
     if(functionFile.Open(funcFile->Location(), RF_SysFile::FileAccessMode::Write, RF_SysFile::FileAccessPriority::DelayReadWrite))
     {
         functionFile.WriteText("#ifndef RF_SYSTEM_DRAWING_OPENGL_HPP\n\
-#define RF_SYSTEM_DRAWING_OPENGL_HPP\n\n"_rfs);
+#define RF_SYSTEM_DRAWING_OPENGL_HPP\n\
+#if _MSC_VER > 1000\n\
+#pragma once\n\
+#endif\n\n\
+#include <RadonFramework/System/Drawing/OpenGLTypes.hpp>\n\
+#include <RadonFramework/System/Drawing/OpenGLConstants.hpp>\n\
+#if defined(RF_WINDOWS)\n\
+    #include <RadonFramework/System/Drawing/WindowsOpenGL.hpp>\n\
+#elif defined(RF_LINUX) || defined(RF_OSX)\n\
+    #include <RadonFramework/OpenGLX.hpp>\n\
+#endif\n\n"_rfs);
 
         for(auto i = 0; i < functionCount; ++i)
         {
@@ -253,7 +265,7 @@ void GenerateOpenGLFunctionDispatcher(RF_Type::UInt32 functionCount, Function* f
             {
                 if(RF_Type::String::UnsafeStringCreation(functions[i].Features[k].API) == "gl"_rfs)
                 {
-                    functionFile.WriteText(RF_Type::String::Format("%s (*%sCallback)("_rfs, functions[i].Result, functions[i].Name));
+                    functionFile.WriteText(RF_Type::String::Format("using %sCallback = %s (*)("_rfs, functions[i].Name, functions[i].Result));
                     if(functions[i].ParameterCount > 0)
                     {
                         if(functions[i].ParameterCount > 1)
@@ -294,8 +306,8 @@ void GenerateOpenGLFunctionDispatcher(RF_Type::UInt32 functionCount, Function* f
     funcFile = RF_IO::Directory::ApplicationDirectory()->SubFile(RF_Type::String("OpenGL.cpp"));
     if(functionFile.Open(funcFile->Location(), RF_SysFile::FileAccessMode::Write, RF_SysFile::FileAccessPriority::DelayReadWrite))
     {
-        functionFile.WriteText("#include \"RadonFramework/System/Drawing/OpenGL.hpp\"\n\n\
-    "_rfs);
+        functionFile.WriteText("#include \"RadonFramework/System/Drawing/OpenGL.hpp\"\n\
+#include \"RadonFramework/System/Drawing/OpenGLSystem.hpp\"\n\n"_rfs);
 
         for(auto i = 0; i < functionCount; ++i)
         {
@@ -331,18 +343,25 @@ void GenerateOpenGLFunctionDispatcher(RF_Type::UInt32 functionCount, Function* f
                     else
                         functionFile.WriteText(RF_Type::String::Format("){\n"_rfs));
 
-                    functionFile.WriteText(RF_Type::String::Format("\
-    auto* cmdBuffer = RF_Draw::GraphicMachineCommandBuffer::GetThreadInstance();\n\
-    RF_Draw::GM%s* cmd = cmdBuffer->AddCommand<RF_Draw::GM%s>();\n"_rfs, functions[i].Name + 2, functions[i].Name + 2));
-
+                    functionFile.WriteText(RF_Type::String::Format("\t%s = reinterpret_cast<%sCallback>(OpenGLGetProcAddress(\"%s\"));\n"_rfs, 
+                        functions[i].Name, functions[i].Name, functions[i].Name));
+                    if(RF_Type::String::UnsafeStringCreation(functions[i].Result) != "void"_rfs)
+                    {
+                        functionFile.WriteText("\treturn "_rfs);
+                    }                    
+                    RF_Type::String params;
                     for(auto j = 0; j < functions[i].ParameterCount; ++j)
                     {
-                        functionFile.WriteText(RF_Type::String::Format(RF_Type::String("\
-    cmd->%s = %s;\n"),
-                                                                       functions[i].Parameters[j].Name, functions[i].Parameters[j].Name));
+                        if (j>0)
+                            params += ","_rfs + RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].Name);
+                        else
+                            params += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].Name);
                     }
+                    functionFile.WriteText(RF_Type::String::Format("\t%s(%s);\n\
+}\n\
+%sCallback %s = %sDispatcher;\n\n"_rfs, functions[i].Name, params.c_str(),
+functions[i].Name, functions[i].Name, functions[i].Name));
 
-                    functionFile.WriteText(RF_Type::String("}\n\n"));
                     break;
                 }
             }
@@ -364,9 +383,10 @@ void GenerateOpenGLHeaders()
 
         if(readSpecs(reinterpret_cast<char*>(data.Get()), data.Size(), &functions, &functionCount, &constants, &constantCount) == 0)
         {
+            //GenerateFunctions(functionCount, functions);
+            //GenerateOpenGLBackendDispatcher(functionCount, functions);
+
             GenerateConstants(constantCount, constants);
-            GenerateFunctions(functionCount, functions);
-            GenerateOpenGLBackendDispatcher(functionCount, functions);
             GenerateOpenGLFunctionDispatcher(functionCount, functions);
 
             freeSpecs(&functions, functionCount, &constants, constantCount);

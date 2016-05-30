@@ -3,7 +3,6 @@
 #include "MainWindow.hpp"
 #include <imgui.h>
 #include <RadonFramework/System/Drawing/OpenGL.hpp>
-#include <RadonFramework/backend/GL/glew.h>
 #include <libSpec.h>
 
 template <typename T, size_t N>
