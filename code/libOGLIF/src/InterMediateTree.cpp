@@ -61,7 +61,23 @@ StateNode* IntermediateTree::AddState(const OGLIF_U8* Name, OGLIF_U32 NameSizeIn
     return result;
 }
 
-VariableNode* IntermediateTree::AddVariable(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes, 
+StateNode* IntermediateTree::GetState(OGLIF_U32 Id)
+{
+    StateNode* result = 0;
+    return result;
+}
+
+bool IntermediateTree::RemoveState(OGLIF_U32 Id)
+{
+    return false;
+}
+
+bool IntermediateTree::ContainsState(StateNode* State)
+{
+    return false;
+}
+
+VariableNode* IntermediateTree::AddVariable(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes,
     OGLIF_TYPE Type, const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes)
 {
     VariableNode* result = 0;
@@ -98,7 +114,22 @@ VariableNode* IntermediateTree::AddVariable(const OGLIF_U8* Name, OGLIF_U32 Name
     return result;
 }
 
-CommandNode* IntermediateTree::AddCommand(StateNode* State, OGLIF_U16 CommandId, 
+bool IntermediateTree::ContainsVariable(VariableNode* Variable)
+{
+    return false;
+}
+
+VariableNode* IntermediateTree::GetVariable(OGLIF_U32 Id)
+{
+    return 0;
+}
+
+bool IntermediateTree::RemoveVariable(OGLIF_U32 Id)
+{
+    return false;
+}
+
+CommandNode* IntermediateTree::AddCommand(StateNode* State, OGLIF_U16 CommandId,
     const OGLIF_PARAMETER* Parameters)
 {
     CommandNode* result = 0;
@@ -131,7 +162,7 @@ CommandNode* IntermediateTree::AddCommand(StateNode* State, OGLIF_U16 CommandId,
         {
             const OGLIF_U8 name[] = "möp";
             auto* variable = AddVariable(name, sizeof(name), Parameters[i].Type, Parameters[i].Value, Parameters[i].ValueSize);
-            hash = variable->Hash;
+            hash = variable->Id;
         }
         result->Parameters[i] = hash;
     }

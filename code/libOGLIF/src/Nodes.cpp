@@ -3,20 +3,9 @@
 
 namespace OGLIF {
 
-OGLIF_U32 CalculateFNV(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
-{
-    OGLIF_U32 hash = 2166136261u;
-    for(OGLIF_SIZE i = 0; i < NameSizeInBytes; ++i)
-    {
-        hash ^= *Name++;
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
 void StateNode::SetState(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
 {
-    Hash = CalculateFNV(Name, NameSizeInBytes);
+    Id = SymbolNode::HashFunction(Name, NameSizeInBytes);
     Symbol = 0;
     Next = 0;
     FirstCommand = 0;
@@ -64,7 +53,18 @@ void VariableNode::SetVariable(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes,
     Symbol = 0;
     Next = 0;
     Type = Type_;
-    Hash = CalculateFNV(Name, NameSizeInBytes);
+    Id = SymbolNode::HashFunction(Name, NameSizeInBytes);
+}
+
+OGLIF_U32 SymbolNode::HashFunction(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes)
+{
+    OGLIF_U32 hash = 2166136261u;
+    for(OGLIF_SIZE i = 0; i < NameSizeInBytes; ++i)
+    {
+        hash ^= *Name++;
+        hash *= 16777619u;
+    }
+    return hash;
 }
 
 }

@@ -12,6 +12,14 @@ struct VariableNode;
 struct CommandNode;
 struct SymbolNode;
 
+enum class ErrorCode
+{
+    Ok,
+    OutOfMemory,
+    InvalidParameter,
+
+};
+
 class IntermediateTree
 {
 public:
@@ -20,8 +28,20 @@ public:
 
     StateNode* AddState(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes);
 
+    StateNode* GetState(OGLIF_U32 Id);
+
+    bool RemoveState(OGLIF_U32 Id);
+
+    bool ContainsState(StateNode* State);
+
     VariableNode* AddVariable(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes,
                      OGLIF_TYPE Type, const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes);
+
+    bool ContainsVariable(VariableNode* Variable);
+
+    VariableNode* GetVariable(OGLIF_U32 Id);
+
+    bool RemoveVariable(OGLIF_U32 Id);
 
     CommandNode* AddCommand(StateNode* State, OGLIF_U16 CommandId, 
                             const OGLIF_PARAMETER* Parameters);

@@ -188,15 +188,21 @@ OGLIFAPI OGLIF_I32 OGLIFAPIENTRY BuildByteCode(OGLIF_HANDLE Handle,
 /**
  * @param Name Takes a \0 terminated Utf8 string.
  */
-OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddState(OGLIF_HANDLE CodeTree, 
-    const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes);
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY AddState(OGLIF_HANDLE CodeTree, 
+    const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes, OGLIF_HANDLE* Destination);
+
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY RemoveState(OGLIF_HANDLE CodeTree,
+    OGLIF_HANDLE State);
 
 /**
 * @param Name Takes a \0 terminated Utf8 string.
 */
-OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddVariable(OGLIF_HANDLE CodeTree,
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY AddVariable(OGLIF_HANDLE CodeTree,
     const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type, 
-    const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes);
+    const OGLIF_U8* Value, OGLIF_U32 ValueSizeInBytes, OGLIF_HANDLE* Destination);
+
+OGLIFAPI OGLIF_ERROR OGLIFAPIENTRY RemoveVariable(OGLIF_HANDLE CodeTree,
+    OGLIF_HANDLE Variable);
 
 OGLIFAPI OGLIF_HANDLE OGLIFAPIENTRY AddCommand(OGLIF_HANDLE CodeTree,
     OGLIF_HANDLE State, OGLIF_U16 CommandId, OGLIF_U8 ParameterCount,

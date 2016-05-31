@@ -8,6 +8,7 @@ namespace OGLIF {
 
 struct SymbolNode
 {
+    static OGLIF_U32 HashFunction(const OGLIF_U8* Name, OGLIF_U32 NameSizeInBytes);
     OGLIF_U32 Hash;
     OGLIF_U8  NameSizeInBytes;
     OGLIF_U8  Name[123];
@@ -36,7 +37,7 @@ struct StateNode
     SymbolNode* Symbol;
     CommandNode* FirstCommand;
     CommandNode* LastCommand;
-    OGLIF_U32 Hash;
+    OGLIF_U32 Id;
 };
 
 struct VariableNode
@@ -47,7 +48,7 @@ struct VariableNode
     VariableNode* Next;
     SymbolNode* Symbol;
     OGLIF_U8 Value[OGLIF::MaxParameterSize::Value];
-    OGLIF_U32 Hash;
+    OGLIF_U32 Id;
     OGLIF_TYPE Type;
     OGLIF_U8 Amount;
 };

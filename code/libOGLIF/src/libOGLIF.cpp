@@ -132,14 +132,39 @@ OGLIF_ERROR OGLIFAPIENTRY FreeCodeTree(OGLIF_HANDLE CodeTree)
     return result;
 }
 
-OGLIF_HANDLE OGLIFAPIENTRY AddState(OGLIF_HANDLE CodeTree, const OGLIF_U8* Name,
-                                    OGLIF_U32 NameSizeInBytes)
+OGLIF_ERROR OGLIFAPIENTRY AddState(OGLIF_HANDLE CodeTree, const OGLIF_U8* Name,
+    OGLIF_U32 NameSizeInBytes, OGLIF_HANDLE* Destination)
 {
-    OGLIF_HANDLE result = OGLIF_INVALIDHANDLE;
-    if(CodeTree != OGLIF_INVALIDHANDLE)
+    OGLIF_ERROR result = OGLIF_INVALIDPARAMETER;
+    if(CodeTree != OGLIF_INVALIDHANDLE && Name != 0 && NameSizeInBytes > 0 && Destination != 0)
     {
-        OGLIF::IntermediateTree* tree = reinterpret_cast<OGLIF::IntermediateTree*>(CodeTree);
-        result = reinterpret_cast<OGLIF_HANDLE>(tree->AddState(Name, NameSizeInBytes));
+        Page* page = GetPage(CodeTree);
+        if(page != 0)
+        {
+            auto* tree = reinterpret_cast<OGLIF::IntermediateTree*>(&page->Mapping.TreeOffset);
+            OGLIF_U32 stateId = OGLIF::SymbolNode::HashFunction(Name, NameSizeInBytes);
+            if(tree->GetState(stateId) == 0)
+            {
+                *Destination = reinterpret_cast<OGLIF_HANDLE>(tree->AddState(Name, NameSizeInBytes));
+
+                if(*Destination == OGLIF_INVALIDHANDLE)
+                {
+                    result = OGLIF_OUTOFMEMORY;
+                }
+                else
+                {
+                    result = OGLIF_OK;
+                }
+            }
+            else
+            {
+
+            }
+        }
+        else
+        {
+            result = OGLIF_INVALIDPARAMETER;
+        }
     }
     return result;
 }
@@ -149,16 +174,33 @@ bool IsValidValue(OGLIF_TYPE Type, const OGLIF_U8* Value, OGLIF_U32 ValueSizeInB
     return true;
 }
 
-OGLIF_HANDLE OGLIFAPIENTRY AddVariable(OGLIF_HANDLE CodeTree, const OGLIF_U8* Name,
+OGLIF_ERROR OGLIFAPIENTRY AddVariable(OGLIF_HANDLE CodeTree, const OGLIF_U8* Name,
     OGLIF_U32 NameSizeInBytes, OGLIF_TYPE Type, const OGLIF_U8* Value, 
-    OGLIF_U32 ValueSizeInBytes)
+    OGLIF_U32 ValueSizeInBytes, OGLIF_HANDLE* Destination)
 {
-    OGLIF_HANDLE result = OGLIF_INVALIDHANDLE;
-    if(CodeTree != OGLIF_INVALIDHANDLE && IsValidValue(Type, Value, ValueSizeInBytes))
+    OGLIF_ERROR result = OGLIF_INVALIDPARAMETER;
+    if(CodeTree != OGLIF_INVALIDHANDLE && IsValidValue(Type, Value, ValueSizeInBytes) && Destination != 0)
     {
-        OGLIF::IntermediateTree* tree = reinterpret_cast<OGLIF::IntermediateTree*>(CodeTree);
-        result = reinterpret_cast<OGLIF_HANDLE>(tree->AddVariable(Name, NameSizeInBytes, 
-                                                                  Type, Value, ValueSizeInBytes));
+        Page* page = GetPage(CodeTree);
+        if(page)
+        {
+            auto* tree = reinterpret_cast<OGLIF::IntermediateTree*>(&page->Mapping.TreeOffset);
+            OGLIF_U32 variableId = OGLIF::SymbolNode::HashFunction(Name, NameSizeInBytes);
+            if(tree->GetVariable(variableId))
+            {
+                *Destination = reinterpret_cast<OGLIF_HANDLE>(tree->AddVariable(Name, NameSizeInBytes,
+                    Type, Value, ValueSizeInBytes));
+
+                if(*Destination == OGLIF_INVALIDHANDLE)
+                {
+                    result = OGLIF_OUTOFMEMORY;
+                }
+                else
+                {
+                    result = OGLIF_OK;
+                }
+            }
+        }
     }
     return result;
 }
@@ -188,6 +230,50 @@ OGLIF_I32 OGLIFAPIENTRY BuildByteCode(OGLIF_HANDLE Handle, OGLIF_U8* Data, OGLIF
             tree->Build();
         }
         result = tree->ReadByteCode(Data, DataSize);
+    }
+    return result;
+}
+
+OGLIF_ERROR OGLIFAPIENTRY RemoveState(OGLIF_HANDLE CodeTree, OGLIF_HANDLE State)
+{
+    OGLIF_ERROR result = OGLIF_INVALIDPARAMETER;
+    if(CodeTree != OGLIF_INVALIDHANDLE && State != OGLIF_INVALIDHANDLE)
+    {
+        Page* page = GetPage(CodeTree);
+        if(page != 0)
+        {
+            auto* tree = reinterpret_cast<OGLIF::IntermediateTree*>(&page->Mapping.TreeOffset);
+            if(tree->ContainsState(reinterpret_cast<OGLIF::StateNode*>(State)))
+            {
+                OGLIF::StateNode* state = reinterpret_cast<OGLIF::StateNode*>(State);
+                if(tree->RemoveState(state->Id))
+                {
+                    result = OGLIF_OK;
+                }
+            }
+        }
+    }
+    return result;
+}
+
+OGLIF_ERROR OGLIFAPIENTRY RemoveVariable(OGLIF_HANDLE CodeTree, OGLIF_HANDLE Variable)
+{
+    OGLIF_ERROR result = OGLIF_INVALIDPARAMETER;
+    if(CodeTree != OGLIF_INVALIDHANDLE && Variable != OGLIF_INVALIDHANDLE)
+    {
+        Page* page = GetPage(CodeTree);
+        if(page != 0)
+        {
+            auto* tree = reinterpret_cast<OGLIF::IntermediateTree*>(&page->Mapping.TreeOffset);
+            if(tree->ContainsVariable(reinterpret_cast<OGLIF::VariableNode*>(Variable)))
+            {
+                OGLIF::VariableNode* variable = reinterpret_cast<OGLIF::VariableNode*>(Variable);
+                if(tree->RemoveVariable(variable->Id))
+                {
+                    result = OGLIF_OK;
+                }
+            }
+        }
     }
     return result;
 }
