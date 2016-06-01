@@ -97,6 +97,7 @@ int stringTypeToSize(const char* type, bool isPointer)
 void ObtainConstants(XMLElement* registry, unsigned int* &constantsCount, Constant** &constants);
 void ObtainCommands(XMLElement* registry, unsigned int* &functionCount, Function** &functions);
 void ObtainFeatures(XMLElement* registry, unsigned int* functionCount, Function** functions);
+void ObtainExtensions(XMLElement* registry, unsigned int* functionCount, Function** functions);
 
 int SPECAPIENTRY readSpecs(const char* xmlData, unsigned int bytes,
     Function** functions, unsigned int* functionCount,
@@ -111,6 +112,7 @@ int SPECAPIENTRY readSpecs(const char* xmlData, unsigned int bytes,
             ObtainConstants(registry, constantsCount, constants);
             ObtainCommands(registry, functionCount, functions);
             ObtainFeatures(registry, functionCount, functions);
+            ObtainExtensions(registry, functionCount, functions);
         }
     }
     return 0;
@@ -138,6 +140,13 @@ void SPECAPIENTRY freeSpecs(Function** functions, const unsigned int functionCou
             delete[](*functions)[i].Features[j].Number;
         }
         delete[](*functions)[i].Features;
+
+        for (j = 0; j < (*functions)[i].ExtensionCount; ++j)
+        {
+            delete[](*functions)[i].Extensions[j].Name;
+            delete[](*functions)[i].Extensions[j].Supported;
+        }
+        delete[](*functions)[i].Extensions;
     }
     delete[] * functions;
     *functions = NULL;
@@ -360,6 +369,8 @@ void ObtainCommands(XMLElement* registry, unsigned int* &functionCount, Function
 
             (*functions)[i].FeatureCount = 0;
             (*functions)[i].Features = 0;
+            (*functions)[i].ExtensionCount = 0;
+            (*functions)[i].Extensions = 0;
 
             cmd = cmd->NextSiblingElement();
         }
@@ -414,13 +425,16 @@ void ObtainFeatures(XMLElement* registry, unsigned int* functionCount, Function*
     // reserve memory
     for(unsigned int i = 0; i < *functionCount; ++i)
     {
-        (*functions)[i].Features = new Feature[(*functions)[i].FeatureCount];
-        for(unsigned int j = 0; j < (*functions)[i].FeatureCount; ++j)
+        if ((*functions)[i].FeatureCount > 0)
         {
-            (*functions)[i].Features[j].API = 0;
-            (*functions)[i].Features[j].Number = 0;
-            (*functions)[i].Features[j].introduced = false;
-            (*functions)[i].Features[j].removed = false;
+            (*functions)[i].Features = new Feature[(*functions)[i].FeatureCount];
+            for(unsigned int j = 0; j < (*functions)[i].FeatureCount; ++j)
+            {
+                (*functions)[i].Features[j].API = 0;
+                (*functions)[i].Features[j].Number = 0;
+                (*functions)[i].Features[j].introduced = false;
+                (*functions)[i].Features[j].removed = false;
+            }
         }
     }
 
@@ -483,5 +497,138 @@ void ObtainFeatures(XMLElement* registry, unsigned int* functionCount, Function*
         {
             feature = feature->NextSiblingElement();
         } while(feature && strcmp(feature->Value(), "feature") != 0);
+    }
+}
+
+void ObtainExtensions(XMLElement* registry, unsigned int* functionCount, Function** functions)
+{
+    XMLElement* extensions = registry->FirstChildElement("extensions");
+    while(extensions)
+    {
+        XMLElement* extension = extensions->FirstChildElement();
+        while(extension)
+        {
+            bool isExtension = strcmp(extension->Name(), "extension") == 0;
+            if(isExtension)
+            {
+                XMLElement* require = extension->FirstChildElement();
+                while(require)
+                {
+                    bool isRequire = strcmp(require->Name(), "require") == 0;
+                    if (isRequire)
+                    {
+                        XMLElement* commandOrEnum = require->FirstChildElement();
+                        while(commandOrEnum)
+                        {
+                            bool isEnum = strcmp(commandOrEnum->Name(), "enum") == 0;
+                            bool isCommand = strcmp(commandOrEnum->Name(), "command") == 0;
+                            if(isEnum || isCommand)
+                            {
+                                const char* name = commandOrEnum->Attribute("name");
+
+                                if(isCommand)
+                                {
+                                    for(unsigned int i = 0; i < *functionCount; ++i)
+                                    {
+                                        if(strcmp((*functions)[i].Name, name) == 0)
+                                        {
+                                            ++(*functions)[i].ExtensionCount;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            commandOrEnum = commandOrEnum->NextSiblingElement();
+                        }
+                    }
+                    require = require->NextSiblingElement();
+                }
+            }
+            extension = extension->NextSiblingElement();
+        }
+
+        do
+        {
+            extensions = extensions->NextSiblingElement();
+        } while(extensions && strcmp(extensions->Value(), "extensions") != 0);
+    }
+
+    // reserve memory
+    for(unsigned int i = 0; i < *functionCount; ++i)
+    {
+        if ((*functions)[i].ExtensionCount > 0)
+        {
+            (*functions)[i].Extensions = new Extension[(*functions)[i].ExtensionCount];
+            for(unsigned int j = 0; j < (*functions)[i].ExtensionCount; ++j)
+            {
+                (*functions)[i].Extensions[j].Name = 0;
+                (*functions)[i].Extensions[j].Supported = 0;
+            }
+        }
+    }
+
+    // update extension data
+    extensions = registry->FirstChildElement("extensions");
+    while(extensions)
+    {
+        XMLElement* extension = extensions->FirstChildElement();
+        while(extension)
+        {
+            bool isExtension = strcmp(extension->Name(), "extension") == 0;
+            if(isExtension)
+            {
+                const char* name = extension->Attribute("name");
+                unsigned int nameLen = strlen(name) + 1;
+                const char* supported = extension->Attribute("supported");
+                unsigned int supportedLen = strlen(supported) + 1;
+                XMLElement* require = extension->FirstChildElement();
+                while(require)
+                {
+                    bool isRequire = strcmp(require->Name(), "require") == 0;
+                    if(isRequire)
+                    {
+                        XMLElement* commandOrEnum = require->FirstChildElement();
+                        while(commandOrEnum)
+                        {
+                            bool isEnum = strcmp(commandOrEnum->Name(), "enum") == 0;
+                            bool isCommand = strcmp(commandOrEnum->Name(), "command") == 0;
+                            if(isEnum || isCommand)
+                            {
+                                if(isCommand)
+                                {
+                                    const char* functionName = commandOrEnum->Attribute("name");
+                                    for(unsigned int i = 0; i < *functionCount; ++i)
+                                    {
+                                        if(strcmp((*functions)[i].Name, functionName) == 0)
+                                        {
+                                            for (unsigned int j = 0; j < (*functions)[i].ExtensionCount; ++j)
+                                            {
+                                                if((*functions)[i].Extensions[j].Name == 0)
+                                                {
+                                                    (*functions)[i].Extensions[j].Name = new char[nameLen];
+                                                    (*functions)[i].Extensions[j].Supported = new char[supportedLen];
+                                                    strcpy((*functions)[i].Extensions[j].Name, name);
+                                                    strcpy((*functions)[i].Extensions[j].Supported, supported);
+                                                    break;
+                                                }
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            commandOrEnum = commandOrEnum->NextSiblingElement();
+                        }
+                    }
+                    require = require->NextSiblingElement();
+                }
+            }
+            extension = extension->NextSiblingElement();
+        }
+
+        do
+        {
+            extensions = extensions->NextSiblingElement();
+        } while(extensions && strcmp(extensions->Value(), "extensions") != 0);
     }
 }

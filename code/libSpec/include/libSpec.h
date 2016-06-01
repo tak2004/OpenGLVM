@@ -65,14 +65,22 @@ typedef struct
     bool removed;
 }Feature;
 
+typedef struct 
+{
+    char* Name;
+    char* Supported;
+}Extension;
+
 typedef struct
 {
     unsigned int FeatureCount;
     unsigned int ParameterCount;
+    unsigned int ExtensionCount;
     char* Name;
     char* Result;
     Feature* Features;
     Parameter* Parameters;
+    Extension* Extensions;
 }Function;
 
 typedef struct  

@@ -11,6 +11,8 @@ public:
     RF_Type::String ConstantsGuard;
     RF_Type::String FunctionGuard;
     RF_Type::String Location;
+    RF_Type::Bool UseExtensions;
+    RF_Type::Bool UseFeatures;
 };
 
 // void GenerateOpenGLBackendDispatcher(unsigned int functionCount, Function* functions)
@@ -273,44 +275,73 @@ void GenerateOpenGLFunctionDispatcher(RF_Type::UInt32 functionCount, Function* f
 
         for(auto i = 0; i < functionCount; ++i)
         {
-            for(auto k = 0; k < functions[i].FeatureCount; ++k)
-            {
-                if(functions[i].Features[k].API != 0)
-                {
-                    auto api = RF_Type::String::UnsafeStringCreation(functions[i].Features[k].API);
-                    if(api == "gl"_rfs || api == "wgl"_rfs || api == "glx"_rfs)
-                    {
-                        functionFile.WriteText(RF_Type::String::Format("using %sCallback = %s (*)("_rfs, functions[i].Name, functions[i].Result));
-                        if(functions[i].ParameterCount > 0)
-                        {
-                            if(functions[i].ParameterCount > 1)
-                            {
-                                for(auto j = 0; j < functions[i].ParameterCount - 1; ++j)
-                                {
-                                    RF_Type::String type;
-                                    if(functions[i].Parameters[j].IsConst)
-                                        type = "const "_rfs;
-                                    type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].Type);
-                                    if(functions[i].Parameters[j].PostType)
-                                        type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].PostType);
-                                    functionFile.WriteText(RF_Type::String::Format("%s %s,"_rfs, type.c_str(), functions[i].Parameters[j].Name));
-                                }
-                            }
-                            RF_Type::String type;
-                            if(functions[i].Parameters[functions[i].ParameterCount - 1].IsConst)
-                                type = "const "_rfs;
-                            type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[functions[i].ParameterCount - 1].Type);
-                            if(functions[i].Parameters[functions[i].ParameterCount - 1].PostType)
-                                type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[functions[i].ParameterCount - 1].PostType);
+            RF_Type::Bool pickup = false;
 
-                            functionFile.WriteText(RF_Type::String::Format("%s %s);\n"_rfs, type.c_str(), functions[i].Parameters[functions[i].ParameterCount - 1].Name));
+            if (Infos.UseFeatures)
+            {
+                for(auto k = 0; k < functions[i].FeatureCount; ++k)
+                {
+                    if(functions[i].Features[k].API != 0)
+                    {
+                        auto api = RF_Type::String::UnsafeStringCreation(functions[i].Features[k].API);
+                        if(api == "gl"_rfs || api == "wgl"_rfs || api == "glx"_rfs)
+                        {
+                            pickup = true;
+                            break;
                         }
-                        else
-                            functionFile.WriteText(");\n"_rfs);
-                        functionFile.WriteText(RF_Type::String::Format("extern %sCallback %s;\n"_rfs, functions[i].Name, functions[i].Name));
-                        break;
                     }
                 }
+            }
+
+            if (Infos.UseExtensions)
+            {
+                for(auto k = 0; k < functions[i].ExtensionCount; ++k)
+                {
+                    if(functions[i].Extensions[k].Supported != 0)
+                    {
+                        auto apis = RF_Type::String::UnsafeStringCreation(functions[i].Extensions[k].Supported).Split("|"_rfs);
+                        
+                        if(RF_Algo::Exists(apis, [](RF_Mem::AutoPointerArray<RF_Type::String>::ConstEnumeratorType& Element) {
+                            return (*Element == "gl"_rfs) || (*Element == "wgl"_rfs) || (*Element == "glx"_rfs);
+                        }))
+                        {
+                            pickup = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (pickup)
+            {
+                functionFile.WriteText(RF_Type::String::Format("using %sCallback = %s (*)("_rfs, functions[i].Name, functions[i].Result));
+                if(functions[i].ParameterCount > 0)
+                {
+                    if(functions[i].ParameterCount > 1)
+                    {
+                        for(auto j = 0; j < functions[i].ParameterCount - 1; ++j)
+                        {
+                            RF_Type::String type;
+                            if(functions[i].Parameters[j].IsConst)
+                                type = "const "_rfs;
+                            type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].Type);
+                            if(functions[i].Parameters[j].PostType)
+                                type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[j].PostType);
+                            functionFile.WriteText(RF_Type::String::Format("%s %s,"_rfs, type.c_str(), functions[i].Parameters[j].Name));
+                        }
+                    }
+                    RF_Type::String type;
+                    if(functions[i].Parameters[functions[i].ParameterCount - 1].IsConst)
+                        type = "const "_rfs;
+                    type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[functions[i].ParameterCount - 1].Type);
+                    if(functions[i].Parameters[functions[i].ParameterCount - 1].PostType)
+                        type += RF_Type::String::UnsafeStringCreation(functions[i].Parameters[functions[i].ParameterCount - 1].PostType);
+
+                    functionFile.WriteText(RF_Type::String::Format("%s %s);\n"_rfs, type.c_str(), functions[i].Parameters[functions[i].ParameterCount - 1].Name));
+                }
+                else
+                    functionFile.WriteText(");\n"_rfs);
+                functionFile.WriteText(RF_Type::String::Format("extern %sCallback %s;\n"_rfs, functions[i].Name, functions[i].Name));
             }
         }
 
@@ -394,19 +425,22 @@ void GenerateOpenGLHeaders()
     RF_Type::String sources[] = {"gl.xml"_rfs , "wgl.xml"_rfs, "glx.xml"_rfs};
     GeneratorInfo generatorInfos[] = {
         {
-            "OpenGL.hpp"_rfs , "OpenGL.cpp"_rfs, "OpenGLConstants.hpp"_rfs, 
-            "RF_SYSTEM_DRAWING_OPENGLCONSTANTS_HPP"_rfs, 
-            "RF_SYSTEM_DRAWING_OPENGL_HPP"_rfs, "RadonFramework/System/Drawing/"_rfs
-        }, 
+            "OpenGL.hpp"_rfs , "OpenGL.cpp"_rfs, "OpenGLConstants.hpp"_rfs,
+            "RF_SYSTEM_DRAWING_OPENGLCONSTANTS_HPP"_rfs,
+            "RF_SYSTEM_DRAWING_OPENGL_HPP"_rfs, "RadonFramework/System/Drawing/"_rfs,
+            true, true
+        },
         {
-            "WindowsOpenGL.hpp"_rfs, "WindowsOpenGL.cpp"_rfs, 
-            "WindowsOpenGLConstants.hpp"_rfs, "RF_SYSTEM_DRAWING_WINDOWSOPENGLCONSTANTS_HPP"_rfs, 
-            "RF_SYSTEM_DRAWING_WINDOWSOPENGL_HPP"_rfs, "RadonFramework/System/Drawing/"_rfs
-        }, 
+            "WindowsOpenGL.hpp"_rfs, "WindowsOpenGL.cpp"_rfs,
+            "WindowsOpenGLConstants.hpp"_rfs, "RF_SYSTEM_DRAWING_WINDOWSOPENGLCONSTANTS_HPP"_rfs,
+            "RF_SYSTEM_DRAWING_WINDOWSOPENGL_HPP"_rfs, "RadonFramework/System/Drawing/"_rfs,
+            true, false
+        },
         {
-            "OpenGLX.hpp"_rfs, "OpenGLX.cpp"_rfs, "OpenGLXConstants.hpp"_rfs, 
-            "RF_SYSTEM_DRAWING_OPENGLXCONSTANTS_HPP"_rfs, "RF_SYSTEM_DRAWING_OPENGLX_HPP"_rfs, 
-            "RadonFramework/System/Drawing/"_rfs
+            "OpenGLX.hpp"_rfs, "OpenGLX.cpp"_rfs, "OpenGLXConstants.hpp"_rfs,
+            "RF_SYSTEM_DRAWING_OPENGLXCONSTANTS_HPP"_rfs, "RF_SYSTEM_DRAWING_OPENGLX_HPP"_rfs,
+            "RadonFramework/System/Drawing/"_rfs,
+            true, false
         }
     };
 
